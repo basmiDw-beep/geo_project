@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventarisasi Botanik — Taman Rumah</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Karla:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #1a1a14;
+    --paper: #f5f2eb;
+    --paper2: #ede9df;
+    --paper3: #e4dfd4;
+    --moss: #3d5a2e;
+    --moss-light: #5a7d45;
+    --moss-pale: #d4e6c3;
+    --soil: #7a5c3a;
+    --sun-col: #e8a020;
+    --shade-col: #4a6b8a;
+    --partial-col: #7a9a5a;
+    --border: rgba(26,26,20,0.1);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Karla',sans-serif; background:var(--paper); color:var(--ink); }
+
+  header {
+    background:var(--moss);
+    color:var(--paper);
+    padding:24px 36px 20px;
+    display:flex; align-items:flex-end; justify-content:space-between;
+    border-bottom:3px solid var(--soil);
+  }
+  header h1 { font-family:'DM Serif Display',serif; font-size:1.9rem; line-height:1; }
+  header h1 em { font-style:italic; color:var(--moss-pale); }
+  .meta { font-family:'DM Mono',monospace; font-size:0.68rem; color:var(--moss-pale); text-align:right; line-height:1.8; }
+
+  .stat-strip { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--border); }
+  .stat { padding:16px 20px; border-right:1px solid var(--border); }
+  .stat:last-child { border-right:none; }
+  .stat-num { font-family:'DM Serif Display',serif; font-size:2.2rem; color:var(--moss); line-height:1; }
+  .stat-label { font-size:0.72rem; color:var(--soil); margin-top:3px; font-weight:500; letter-spacing:0.5px; text-transform:uppercase; }
+  .stat-sub { font-size:0.68rem; color:rgba(26,26,20,0.4); margin-top:1px; font-family:'DM Mono',monospace; }
+
+  .main { display:grid; grid-template-columns:1fr 320px; }
+
+  /* DENAH PANEL */
+  .denah-panel { border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+  .panel-title {
+    padding:12px 18px;
+    font-family:'DM Mono',monospace; font-size:0.68rem; letter-spacing:1.5px;
+    text-transform:uppercase; color:var(--soil);
+    border-bottom:1px solid var(--border); background:var(--paper2);
+    display:flex; align-items:center; gap:8px;
+  }
+  .panel-title span { color:var(--moss); }
+
+  .denah-wrap {
+    padding:24px 20px 16px;
+    background:var(--paper);
+    display:flex; justify-content:center;
+  }
+
+  #denah-svg {
+    width:100%; max-width:580px;
+    cursor:default;
+  }
+
+  .zona-path {
+    cursor:pointer;
+    transition: opacity 0.15s;
+    stroke-width:1.5;
+    stroke-linejoin:round;
+  }
+  .zona-path:hover { opacity:0.85; }
+  .zona-path.active { stroke-width:2.5; stroke:#1a1a14; }
+  .zona-path.dimmed { opacity:0.3; }
+
+  .denah-legend {
+    display:flex; gap:16px; padding:10px 20px;
+    border-top:1px solid var(--border); background:var(--paper2); flex-wrap:wrap;
+  }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:0.7rem; color:rgba(26,26,20,0.6); font-family:'DM Mono',monospace; }
+  .legend-dot { width:10px; height:10px; border-radius:2px; }
+
+  /* SIDEBAR */
+  .sidebar { display:flex; flex-direction:column; border-bottom:1px solid var(--border); }
+
+  .zona-detail { padding:16px 18px; border-bottom:1px solid var(--border); min-height:150px; }
+  .zona-name { font-family:'DM Serif Display',serif; font-size:1.25rem; color:var(--moss); margin-bottom:4px; }
+  .zona-badges { display:flex; flex-wrap:wrap; gap:5px; margin:7px 0; }
+  .badge { font-family:'DM Mono',monospace; font-size:0.62rem; padding:3px 8px; border-radius:3px; letter-spacing:0.3px; }
+  .badge-sun { background:#fef3d0; color:#8a5a00; }
+  .badge-shade { background:#dde8f5; color:#2a4a6a; }
+  .badge-partial { background:#e2eed8; color:#3a5a20; }
+  .badge-surface { background:var(--paper2); color:var(--soil); border:1px solid var(--border); }
+  .badge-temp { background:#fde8d8; color:#7a2a0a; }
+
+  .zona-plants { margin-top:8px; max-height:160px; overflow-y:auto; }
+  .plant-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid var(--border); font-size:0.77rem; }
+  .plant-row:last-child { border-bottom:none; }
+  .plant-nama { font-weight:500; }
+  .plant-ilmiah { font-family:'DM Mono',monospace; font-size:0.62rem; color:rgba(26,26,20,0.4); font-style:italic; margin-top:1px; }
+  .cat-pill { font-size:0.58rem; padding:2px 7px; border-radius:20px; font-family:'DM Mono',monospace; white-space:nowrap; }
+  .cat-Hias { background:#ede0f5; color:#5a2a7a; }
+  .cat-Buah { background:#fde8c8; color:#7a3a00; }
+  .cat-Herbal { background:#d8f0d8; color:#1a5a1a; }
+  .cat-Pangan { background:#f0ead0; color:#5a4a10; }
+
+  .chart-panel { padding:14px 18px 12px; }
+  .chart-panel canvas { max-height:150px; }
+
+  /* ZONA CARDS */
+  .zona-list-panel { grid-column:1/-1; border-top:1px solid var(--border); }
+  .zona-grid { display:grid; grid-template-columns:repeat(6,1fr); }
+  .zona-card { padding:14px 16px; border-right:1px solid var(--border); cursor:pointer; transition:background 0.15s; }
+  .zona-card:last-child { border-right:none; }
+  .zona-card:hover { background:var(--paper2); }
+  .zona-card.active { background:var(--moss-pale); }
+  .zona-card-name { font-family:'DM Serif Display',serif; font-size:0.95rem; color:var(--moss); margin-bottom:3px; }
+  .zona-card-count { font-family:'DM Mono',monospace; font-size:1.3rem; font-weight:500; }
+  .zona-card-label { font-size:0.65rem; color:rgba(26,26,20,0.4); margin-top:1px; }
+  .zona-card-bar { height:3px; background:var(--moss-pale); margin-top:8px; border-radius:2px; overflow:hidden; }
+  .zona-card-fill { height:100%; background:var(--moss); border-radius:2px; }
+
+  .placeholder { color:rgba(26,26,20,0.35); font-size:0.78rem; font-style:italic; padding:24px 0; text-align:center; }
+
+  .zona-plants::-webkit-scrollbar { width:3px; }
+  .zona-plants::-webkit-scrollbar-thumb { background:var(--moss-pale); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:2px;color:var(--moss-pale);margin-bottom:5px;text-transform:uppercase">Spatial Botanical Inventory</div>
+    <h1>Taman <em>Rumah</em></h1>
+  </div>
+  <div class="meta">
+    66 spesimen terdokumentasi<br>
+    6 zona spasial · ~597 m²<br>
+    Diinisiasi 10 April 2026
+  </div>
+</header>
+
+<div class="stat-strip">
+  <div class="stat">
+    <div class="stat-num">66</div>
+    <div class="stat-label">Total Tanaman</div>
+    <div class="stat-sub">4 kategori</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">6</div>
+    <div class="stat-label">Zona Spasial</div>
+    <div class="stat-sub">bentuk dari QGIS</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">28</div>
+    <div class="stat-label">Spesies Hias</div>
+    <div class="stat-sub">42% koleksi</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">597</div>
+    <div class="stat-label">m² Lahan</div>
+    <div class="stat-sub">posisi hook</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="denah-panel">
+    <div class="panel-title"><span>◈</span> Denah Zona — klik untuk detail</div>
+    <div class="denah-wrap">
+      <!-- SVG denah abstrak — koordinat diturunkan proporsional dari QGIS, tanpa referensi GPS -->
+      <svg id="denah-svg" viewBox="0 0 600 500" xmlns="http://www.w3.org/2000/svg">
+
+        <!-- Grid latar — kesan denah teknis -->
+        <defs>
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(26,26,20,0.06)" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="600" height="500" fill="var(--paper2)"/>
+        <rect width="600" height="500" fill="url(#grid)"/>
+
+        <!-- Batas lahan (bounding box) -->
+        <rect x="55" y="55" width="490" height="390" fill="none" stroke="rgba(26,26,20,0.2)" stroke-width="1" stroke-dasharray="6 3" rx="2"/>
+        <text x="68" y="48" font-family="DM Mono,monospace" font-size="9" fill="rgba(26,26,20,0.35)" letter-spacing="1">BATAS LAHAN</text>
+
+        <!-- ZONA 3: samping_kanan (shade) — bentuk L besar di atas-kiri -->
+        <path id="path-3" class="zona-path"
+          d="M 65.5,135.1 L 76.5,164.0 L 117.2,155.8 L 112.4,139.2 L 165.4,126.8 L 159.2,113.7 L 266.0,89.6 L 259.8,82.7 L 60.0,127.5 Z"
+          fill="#4a6b8a" fill-opacity="0.22" stroke="#4a6b8a"
+          onclick="selectZona(3)"/>
+
+        <!-- ZONA 5: halaman_belakang (partial_shade) — poligon besar tengah -->
+        <path id="path-5" class="zona-path"
+          d="M 292.2,84.1 L 352.1,301.2 L 450.7,268.1 L 383.2,60.0 Z"
+          fill="#7a9a5a" fill-opacity="0.28" stroke="#7a9a5a"
+          onclick="selectZona(5)"/>
+
+        <!-- ZONA 1: halaman_depan (full_sun) — poligon besar bawah-kiri -->
+        <path id="path-1" class="zona-path"
+          d="M 105.8,313.2 L 141.0,301.5 L 155.4,346.3 L 157.5,353.9 L 164.4,354.6 L 187.8,353.2 L 208.5,347.7 L 215.4,363.5 L 246.4,358.0 L 269.8,412.4 L 229.2,426.2 L 198.2,434.5 L 181.6,437.2 L 167.8,437.9 L 160.3,440.0 L 156.8,439.3 L 141.0,435.9 Z"
+          fill="#e8a020" fill-opacity="0.28" stroke="#e8a020"
+          onclick="selectZona(1)"/>
+
+        <!-- ZONA 4: samping_kiri (full_sun) -->
+        <path id="path-4" class="zona-path"
+          d="M 280.1,349.7 L 295.3,409.0 L 373.9,382.8 L 360.1,324.9 Z"
+          fill="#e8a020" fill-opacity="0.22" stroke="#e8a020"
+          onclick="selectZona(4)"/>
+
+        <!-- ZONA 6: depan_garasi (partial_shade) -->
+        <path id="path-6" class="zona-path"
+          d="M 396.6,297.4 L 414.5,374.5 L 473.1,359.4 L 454.1,285.0 Z"
+          fill="#7a9a5a" fill-opacity="0.22" stroke="#7a9a5a"
+          onclick="selectZona(6)"/>
+
+        <!-- ZONA 2: depan_kamar (shade) -->
+        <path id="path-2" class="zona-path"
+          d="M 91.0,260.5 L 100.7,287.4 L 141.3,277.7 L 132.3,254.3 Z"
+          fill="#4a6b8a" fill-opacity="0.3" stroke="#4a6b8a"
+          onclick="selectZona(2)"/>
+
+        <!-- Label zona (singkat) -->
+        <text x="134.8" y="122" text-anchor="middle" font-family="DM Mono,monospace" font-size="8.5" fill="#2a4a6a" font-weight="500" pointer-events="none">Samp. Kanan</text>
+        <text x="354.1" y="154" text-anchor="middle" font-family="DM Mono,monospace" font-size="8.5" fill="#3a5a20" font-weight="500" pointer-events="none">Hal. Belakang</text>
+        <text x="177.4" y="386" text-anchor="middle" font-family="DM Mono,monospace" font-size="8.5" fill="#8a5a00" font-weight="500" pointer-events="none">Hal. Depan</text>
+        <text x="317.9" y="368" text-anchor="middle" font-family="DM Mono,monospace" font-size="8.5" fill="#8a5a00" font-weight="500" pointer-events="none">Samp. Kiri</text>
+        <text x="427.0" y="328" text-anchor="middle" font-family="DM Mono,monospace" font-size="8.5" fill="#3a5a20" font-weight="500" pointer-events="none">Dep. Garasi</text>
+        <text x="111.3" y="273" text-anchor="middle" font-family="DM Mono,monospace" font-size="8.5" fill="#2a4a6a" font-weight="500" pointer-events="none">Dep. Kamar</text>
+
+        <!-- Jumlah tanaman per zona -->
+        <text x="134.8" y="133" text-anchor="middle" font-family="DM Mono,monospace" font-size="7.5" fill="rgba(26,26,20,0.4)" pointer-events="none">8 tan.</text>
+        <text x="354.1" y="165" text-anchor="middle" font-family="DM Mono,monospace" font-size="7.5" fill="rgba(26,26,20,0.4)" pointer-events="none">17 tan.</text>
+        <text x="177.4" y="397" text-anchor="middle" font-family="DM Mono,monospace" font-size="7.5" fill="rgba(26,26,20,0.4)" pointer-events="none">15 tan.</text>
+        <text x="317.9" y="379" text-anchor="middle" font-family="DM Mono,monospace" font-size="7.5" fill="rgba(26,26,20,0.4)" pointer-events="none">11 tan.</text>
+        <text x="427.0" y="339" text-anchor="middle" font-family="DM Mono,monospace" font-size="7.5" fill="rgba(26,26,20,0.4)" pointer-events="none">6 tan.</text>
+        <text x="111.3" y="284" text-anchor="middle" font-family="DM Mono,monospace" font-size="7.5" fill="rgba(26,26,20,0.4)" pointer-events="none">9 tan.</text>
+
+        <!-- Kompas -->
+        <g transform="translate(562, 72)">
+          <circle r="16" fill="var(--paper)" stroke="rgba(26,26,20,0.2)" stroke-width="0.8"/>
+          <text x="0" y="-4" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="var(--moss)" font-weight="500">N</text>
+          <line x1="0" y1="-13" x2="0" y2="-3" stroke="var(--moss)" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="0" y1="3" x2="0" y2="13" stroke="rgba(26,26,20,0.25)" stroke-width="0.8" stroke-linecap="round"/>
+          <line x1="-13" y1="0" x2="13" y2="0" stroke="rgba(26,26,20,0.15)" stroke-width="0.6"/>
+        </g>
+
+        <!-- Skala abstrak -->
+        <line x1="68" y1="468" x2="148" y2="468" stroke="rgba(26,26,20,0.35)" stroke-width="1"/>
+        <line x1="68" y1="464" x2="68" y2="472" stroke="rgba(26,26,20,0.35)" stroke-width="1"/>
+        <line x1="148" y1="464" x2="148" y2="472" stroke="rgba(26,26,20,0.35)" stroke-width="1"/>
+        <text x="108" y="481" text-anchor="middle" font-family="DM Mono,monospace" font-size="7.5" fill="rgba(26,26,20,0.4)">skala relatif</text>
+
+      </svg>
+    </div>
+    <div class="denah-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#e8a020"></div>Full Sun</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7a9a5a"></div>Partial Shade</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4a6b8a"></div>Shade</div>
+      <div style="margin-left:auto;font-family:'DM Mono',monospace;font-size:0.65rem;color:rgba(26,26,20,0.3)">denah proporsional · tanpa referensi GPS</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="panel-title"><span>◈</span> Detail Zona</div>
+    <div class="zona-detail" id="zona-detail">
+      <div class="placeholder">← Klik zona di denah<br>untuk melihat detail tanaman</div>
+    </div>
+    <div class="panel-title"><span>◈</span> Komposisi Kategori</div>
+    <div class="chart-panel">
+      <canvas id="donutChart"></canvas>
+    </div>
+  </div>
+
+  <div class="zona-list-panel">
+    <div class="panel-title"><span>◈</span> Ringkasan Per Zona</div>
+    <div class="zona-grid" id="zona-grid"></div>
+  </div>
+</div>
+
+<script>
+const tanaman = [
+  {id:1,zona:1,nama:"Kaktus Centong",ilmiah:"Opuntia cochenillifera",kat:"Hias"},
+  {id:2,zona:1,nama:"Pucuk Merah",ilmiah:"Syzygium myrtifolium",kat:"Hias"},
+  {id:3,zona:1,nama:"Cabe Rawit",ilmiah:"Capsicum frutescens",kat:"Pangan"},
+  {id:4,zona:1,nama:"Sirsak",ilmiah:"Annona muricata",kat:"Buah"},
+  {id:5,zona:1,nama:"Anggrek Coelogyne",ilmiah:"Coelogyne dayana",kat:"Hias"},
+  {id:6,zona:1,nama:"Talas Bogor",ilmiah:"Colocasia esculenta",kat:"Pangan"},
+  {id:7,zona:1,nama:"Daun Keladi",ilmiah:"Caladium sp.",kat:"Hias"},
+  {id:8,zona:1,nama:"Hydrangea",ilmiah:"Hydrangea macrophylla",kat:"Hias"},
+  {id:9,zona:1,nama:"Bunga Lili Hutan",ilmiah:"Crinum asiaticum",kat:"Hias"},
+  {id:10,zona:1,nama:"Kunyit",ilmiah:"Curcuma longa",kat:"Herbal"},
+  {id:11,zona:1,nama:"Ubi Ungu",ilmiah:"Ipomoea batatas",kat:"Pangan"},
+  {id:12,zona:1,nama:"Bunga Desember",ilmiah:"Scadoxus multiflorus",kat:"Hias"},
+  {id:13,zona:1,nama:"Jambu Biji",ilmiah:"Psidium guajava",kat:"Buah"},
+  {id:14,zona:1,nama:"Cecenet",ilmiah:"Physalis angulata",kat:"Herbal"},
+  {id:15,zona:1,nama:"Bunga Gerbera",ilmiah:"Gerbera jamesonii",kat:"Hias"},
+  {id:16,zona:2,nama:"Jambu Biji",ilmiah:"Psidium guajava",kat:"Buah"},
+  {id:17,zona:2,nama:"Sereh",ilmiah:"Cymbopogon citratus",kat:"Herbal"},
+  {id:18,zona:2,nama:"Kunyit",ilmiah:"Curcuma longa",kat:"Herbal"},
+  {id:19,zona:2,nama:"Bunga Kamboja",ilmiah:"Plumeria sp.",kat:"Hias"},
+  {id:20,zona:2,nama:"Aspidistra",ilmiah:"Aspidistra elatior",kat:"Hias"},
+  {id:21,zona:2,nama:"Andong Varigata",ilmiah:"Cordyline fruticosa",kat:"Hias"},
+  {id:22,zona:2,nama:"Kucing Galak",ilmiah:"Acalypha indica",kat:"Herbal"},
+  {id:23,zona:2,nama:"Bakung Putih",ilmiah:"Crinum asiaticum",kat:"Hias"},
+  {id:24,zona:2,nama:"Dracaena",ilmiah:"Dracaena fragrans",kat:"Hias"},
+  {id:25,zona:3,nama:"Daun Pandan",ilmiah:"Pandanus amaryllifolius",kat:"Herbal"},
+  {id:26,zona:3,nama:"Bunga Kenanga",ilmiah:"Cananga odorata",kat:"Hias"},
+  {id:27,zona:3,nama:"Pohon Saga",ilmiah:"Adenanthera pavonina",kat:"Herbal"},
+  {id:28,zona:3,nama:"Paku Adiantum",ilmiah:"Adiantum sp.",kat:"Hias"},
+  {id:29,zona:3,nama:"Sirih Lurik",ilmiah:"Scindapsus pictus",kat:"Hias"},
+  {id:30,zona:3,nama:"Tradescantia",ilmiah:"Tradescantia zebrina",kat:"Hias"},
+  {id:31,zona:3,nama:"Paku Pedang",ilmiah:"Nephrolepis exaltata",kat:"Hias"},
+  {id:32,zona:3,nama:"Pakis Phymatosorus",ilmiah:"Phymatosorus scolopendria",kat:"Hias"},
+  {id:33,zona:4,nama:"Bunga Desember",ilmiah:"Scadoxus multiflorus",kat:"Hias"},
+  {id:34,zona:4,nama:"Buah Naga Merah",ilmiah:"Hylocereus costaricensis",kat:"Buah"},
+  {id:35,zona:4,nama:"Bunga Kenanga",ilmiah:"Cananga odorata",kat:"Hias"},
+  {id:36,zona:4,nama:"Lemon Hijau",ilmiah:"Citrus limon",kat:"Buah"},
+  {id:37,zona:4,nama:"Bunga Melati",ilmiah:"Jasminum sambac",kat:"Hias"},
+  {id:38,zona:4,nama:"Kunyit",ilmiah:"Curcuma longa",kat:"Herbal"},
+  {id:39,zona:4,nama:"Talas Bogor",ilmiah:"Colocasia esculenta",kat:"Pangan"},
+  {id:40,zona:4,nama:"Bunga Sedap Malam",ilmiah:"Polianthes tuberosa",kat:"Hias"},
+  {id:41,zona:4,nama:"Tanaman Anggur",ilmiah:"Vitis vinifera",kat:"Buah"},
+  {id:42,zona:4,nama:"Cabai Rawit",ilmiah:"Capsicum frutescens",kat:"Pangan"},
+  {id:43,zona:4,nama:"Ubi Ungu",ilmiah:"Ipomoea batatas",kat:"Pangan"},
+  {id:44,zona:5,nama:"Pohon Alpukat",ilmiah:"Persea americana",kat:"Buah"},
+  {id:45,zona:5,nama:"Buah Kepel",ilmiah:"Stelechocarpus burahol",kat:"Buah"},
+  {id:46,zona:5,nama:"Ubi Ungu",ilmiah:"Ipomoea batatas",kat:"Pangan"},
+  {id:47,zona:5,nama:"Lidah Buaya",ilmiah:"Aloe vera",kat:"Herbal"},
+  {id:48,zona:5,nama:"Kencur",ilmiah:"Kaempferia galanga",kat:"Herbal"},
+  {id:49,zona:5,nama:"Azolla",ilmiah:"Azolla pinnata",kat:"Hias"},
+  {id:50,zona:5,nama:"Pisang Tanduk",ilmiah:"Musa paradisiaca",kat:"Buah"},
+  {id:51,zona:5,nama:"Singkong",ilmiah:"Manihot esculenta",kat:"Pangan"},
+  {id:52,zona:5,nama:"Cabai Rawit",ilmiah:"Capsicum frutescens",kat:"Pangan"},
+  {id:53,zona:5,nama:"Kunyit",ilmiah:"Curcuma longa",kat:"Herbal"},
+  {id:54,zona:5,nama:"Pisang Kepok",ilmiah:"Musa paradisiaca",kat:"Buah"},
+  {id:55,zona:5,nama:"Bunga Wijayakusuma",ilmiah:"Epiphyllum oxypetalum",kat:"Hias"},
+  {id:56,zona:5,nama:"Sirih Gading",ilmiah:"Epipremnum aureum",kat:"Hias"},
+  {id:57,zona:5,nama:"Lidah Mertua",ilmiah:"Sansevieria trifasciata",kat:"Hias"},
+  {id:58,zona:5,nama:"Kiambang",ilmiah:"Pistia stratiotes",kat:"Hias"},
+  {id:59,zona:5,nama:"Anthurium Hookeri",ilmiah:"Anthurium hookeri",kat:"Hias"},
+  {id:60,zona:5,nama:"Paku Tanduk Rusa",ilmiah:"Platycerium bifurcatum",kat:"Hias"},
+  {id:61,zona:6,nama:"Pepaya",ilmiah:"Carica papaya",kat:"Buah"},
+  {id:62,zona:6,nama:"Labu Kuning",ilmiah:"Cucurbita moschata",kat:"Pangan"},
+  {id:63,zona:6,nama:"Pisang Tanduk",ilmiah:"Musa paradisiaca",kat:"Buah"},
+  {id:64,zona:6,nama:"Pisang Ambon",ilmiah:"Musa acuminata",kat:"Buah"},
+  {id:65,zona:6,nama:"Singkong",ilmiah:"Manihot esculenta",kat:"Pangan"},
+  {id:66,zona:6,nama:"Cabe Rawit",ilmiah:"Capsicum frutescens",kat:"Pangan"},
+];
+
+const zonaInfo = {
+  1:{nama:"Halaman Depan",  cahaya:"full_sun",      suhu:31.5, permukaan:"Tanah Rumput"},
+  2:{nama:"Depan Kamar",    cahaya:"shade",          suhu:26.0, permukaan:"Tanah Rumput"},
+  3:{nama:"Samping Kanan",  cahaya:"shade",          suhu:26.0, permukaan:"Tanah Kosong"},
+  4:{nama:"Samping Kiri",   cahaya:"full_sun",       suhu:32.0, permukaan:"Semen"},
+  5:{nama:"Halaman Belakang",cahaya:"partial_shade", suhu:28.5, permukaan:"Tanah Rumput"},
+  6:{nama:"Depan Garasi",   cahaya:"partial_shade",  suhu:28.5, permukaan:"Tanah Rumput"},
+};
+
+const cahayaColor = {
+  full_sun:      {label:"Full Sun",      cls:"badge-sun"},
+  partial_shade: {label:"Partial Shade", cls:"badge-partial"},
+  shade:         {label:"Shade",         cls:"badge-shade"},
+};
+
+let activeZona = null;
+
+function selectZona(id) {
+  activeZona = id;
+
+  // Update SVG styles
+  [1,2,3,4,5,6].forEach(i => {
+    const el = document.getElementById('path-'+i);
+    if (!el) return;
+    el.classList.remove('active','dimmed');
+    el.classList.add(i === id ? 'active' : 'dimmed');
+  });
+
+  // Update detail panel
+  const info = zonaInfo[id];
+  const plants = tanaman.filter(t => t.zona === id);
+  const cah = cahayaColor[info.cahaya];
+
+  let html = `<div class="zona-name">${info.nama}</div>`;
+  html += `<div class="zona-badges">`;
+  html += `<span class="badge ${cah.cls}">${cah.label}</span>`;
+  html += `<span class="badge badge-temp">🌡 ${info.suhu}°C</span>`;
+  html += `<span class="badge badge-surface">${info.permukaan}</span>`;
+  html += `</div>`;
+  html += `<div style="font-size:0.7rem;color:rgba(26,26,20,0.45);margin-bottom:6px;font-family:'DM Mono',monospace">${plants.length} tanaman terdaftar</div>`;
+  html += `<div class="zona-plants">`;
+  plants.forEach(p => {
+    html += `<div class="plant-row">
+      <div>
+        <div class="plant-nama">${p.nama}</div>
+        <div class="plant-ilmiah">${p.ilmiah}</div>
+      </div>
+      <span class="cat-pill cat-${p.kat}">${p.kat}</span>
+    </div>`;
+  });
+  html += `</div>`;
+  document.getElementById('zona-detail').innerHTML = html;
+
+  // Update active card
+  document.querySelectorAll('.zona-card').forEach(c => c.classList.remove('active'));
+  const card = document.querySelector(`.zona-card[data-id="${id}"]`);
+  if (card) card.classList.add('active');
+}
+
+// Reset dimming kalau klik area kosong
+document.getElementById('denah-svg').addEventListener('click', function(e) {
+  if (e.target.tagName !== 'path') {
+    [1,2,3,4,5,6].forEach(i => {
+      const el = document.getElementById('path-'+i);
+      if (el) { el.classList.remove('active','dimmed'); }
+    });
+    document.getElementById('zona-detail').innerHTML =
+      '<div class="placeholder">← Klik zona di denah<br>untuk melihat detail tanaman</div>';
+    document.querySelectorAll('.zona-card').forEach(c => c.classList.remove('active'));
+    activeZona = null;
+  }
+});
+
+// Zona cards
+const grid = document.getElementById('zona-grid');
+const maxCount = Math.max(...Object.keys(zonaInfo).map(id => tanaman.filter(t=>t.zona===+id).length));
+
+Object.entries(zonaInfo).forEach(([id, info]) => {
+  const count = tanaman.filter(t => t.zona === +id).length;
+  const cah = cahayaColor[info.cahaya];
+  const dotColor = info.cahaya === 'full_sun' ? '#e8a020' : info.cahaya === 'shade' ? '#4a6b8a' : '#7a9a5a';
+  const pct = Math.round((count / maxCount) * 100);
+  const card = document.createElement('div');
+  card.className = 'zona-card';
+  card.dataset.id = id;
+  card.innerHTML = `
+    <div class="zona-card-name">${info.nama}</div>
+    <div class="zona-card-count">${count}</div>
+    <div class="zona-card-label" style="color:${dotColor}">${cah.label}</div>
+    <div class="zona-card-bar"><div class="zona-card-fill" style="width:${pct}%"></div></div>
+  `;
+  card.addEventListener('click', () => selectZona(+id));
+  grid.appendChild(card);
+});
+
+// Donut chart
+const katCount = {Hias:0,Buah:0,Herbal:0,Pangan:0};
+tanaman.forEach(t => katCount[t.kat]++);
+
+new Chart(document.getElementById('donutChart'), {
+  type:'doughnut',
+  data:{
+    labels: Object.keys(katCount),
+    datasets:[{
+      data: Object.values(katCount),
+      backgroundColor:['#c8a0e8','#f5c080','#90cc90','#e0d090'],
+      borderColor:'#f5f2eb',
+      borderWidth:3,
+      hoverOffset:6
+    }]
+  },
+  options:{
+    cutout:'62%',
+    plugins:{
+      legend:{
+        position:'bottom',
+        labels:{font:{family:'DM Mono',size:10},color:'#1a1a14',padding:8,boxWidth:9,boxHeight:9}
+      },
+      tooltip:{
+        callbacks:{label:ctx=>` ${ctx.parsed} tanaman (${Math.round(ctx.parsed/66*100)}%)`}
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>
